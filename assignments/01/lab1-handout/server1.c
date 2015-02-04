@@ -70,7 +70,7 @@ struct aconnexion {
   long starttime;
 } con[32];
 
-int listen_port = 18800, fdc; 
+int listen_port = 18732, fdc; 
 struct timeval tv;
 struct tm *ptm;
 fd_set origfds;
