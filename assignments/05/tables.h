@@ -8,7 +8,7 @@ typedef int value_t;
 typedef int bool;
 
 #define true 1
-#define false 2
+#define false 0
 
 #define DEFAULT_VAL 0
 
@@ -16,6 +16,11 @@ typedef struct mod_val {
    value_t val;
    bool tainted;
 } mod_val;
+
+typedef struct taint_list {
+   char *varname;
+   struct tainted_list *next; 
+}
 
 typedef struct varctx_t {
   char *name;

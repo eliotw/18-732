@@ -28,7 +28,15 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
         mod_ret.tainted = false;
         return mod_ret;
         break;
-    case var_ast: return lookup_var(e->info.varname, tbl); break;
+    case var_ast: 
+        mod_ret = lookup_var(e->info.varname, tbl);
+        
+        // Check if variable is tainted
+        if(mod_ret.tainted == true) {
+            fprintf(stderr, "%s", e->info.varname);
+        }
+        return mod_ret;
+        break;
     case node_ast: {
 	switch(e->info.node.tag){
 	case MEM:
@@ -57,9 +65,11 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 	  break;
 	case TIMES:
 	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	    mod_ret1 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+	    mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
         mod_ret.val = mod_ret1.val * mod_ret2.val;
         mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
+        if(eval_debug)
+            printf("[Debug] times: %u * %u, taint: %u\n", e->info.node.arguments->elem->info.string, e->info.node.arguments->next->elem->info.string, mod_ret.tainted);
         return mod_ret;
 	  break;
 
@@ -68,6 +78,9 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
           mod_ret.val = (mod_ret1.val == mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
+          if(eval_debug) {
+              printf("[Debug] EQ: %u == %u", mod_ret1.val, mod_ret2.val);
+          }
           return mod_ret;
 	  break;
 	case NEQ:
@@ -202,8 +215,10 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 
             // Check if value is tainted
             if(mod_v.tainted == true) {
+                fprintf(stderr, "Tainted variable: ");
                 printf("<secret>\n");
             } else {
+                fprintf(stderr, "Tainted variable: None\n");
                 printf("%u\n", mod_v.val);
             }
 		break;
@@ -222,7 +237,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 	    state = eval_stmts(s->info.node.arguments->next->elem, state);
 	  break;
 	case ASSERT:
-	    if(eval_exp(s->info.node.arguments->elem, state->tbl,state->mem).val ==1){
+	    if(eval_exp(s->info.node.arguments->elem, state->tbl,state->mem).val ==0){
 		printf("Assert failed!\n");
 	    }
 	  break;

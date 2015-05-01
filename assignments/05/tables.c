@@ -19,7 +19,7 @@ mod_val lookup_var(char *name, varctx_t *c)
   while(c != NULL){
     if(strcmp(c->name, name) == 0){
       if(eval_debug)
-        printf("[Debug] lookup: %s value: %x\n", name, c->val);
+        printf("[Debug] lookup: %s value: %x taint: %x\n", name, c->val, c->tainted);
 
       ret.val = c->val;
       ret.tainted = c->tainted;
@@ -44,7 +44,7 @@ varctx_t * update_var(char *name, mod_val val, varctx_t *o)
   while(c != NULL){
     if(strcmp(c->name, name) == 0){
       if(eval_debug){
-	printf("[Debug] update %s with %x (old value %x)\n", name, val.val, c->val);
+	printf("[Debug] update %s with %x (old value %x), taint status: %x (old value %x)\n", name, val.val, c->val, val.tainted, c->tainted);
       }
       c->val = val.val;
       c->tainted = val.tainted;
@@ -58,7 +58,7 @@ varctx_t * update_var(char *name, mod_val val, varctx_t *o)
   n->tainted = val.tainted;
   n->next = o;
   if(eval_debug){
-    printf("[Debug] update %s with %x (new node)\n", name, val.val);
+    printf("[Debug] update %s with %x (new node), taint status: %x\n", name, val.val, n->tainted);
   }
 
   return n;
@@ -71,8 +71,8 @@ memctx_t *store(unsigned int addr, mod_val val, memctx_t *o)
   while(c != NULL){
     if(c->addr == addr){
       if(eval_debug){
-	printf("[Debug] store %x with %x (replacing %x)\n", c->addr,
-	       val.val, c->val);
+	printf("[Debug] store %x with %x (replacing %x), taint status: %x (replacing %x)\n", c->addr,
+	       val.val, c->val, val.tainted, c->tainted);
       }
 
       c->val = val.val;
@@ -88,7 +88,7 @@ memctx_t *store(unsigned int addr, mod_val val, memctx_t *o)
   n->tainted = val.tainted;
   n->next = o;
   if(eval_debug){
-    printf("[Debug] store %x with %x (new node)\n", n->addr, val.val);
+    printf("[Debug] store %x with %x (new node), taint status: %x\n", n->addr, val.val, val.tainted);
   }
 
   return n;
@@ -100,7 +100,7 @@ mod_val load(unsigned int addr, memctx_t *c)
   while(c != NULL){
     if(c->addr == addr){
       if(eval_debug)
-        printf("[Debug] load: %x value: %x\n", addr, c->val);
+        printf("[Debug] load: %x value: %x, taint status: %x\n", addr, c->val, c->tainted);
 
       ret.val = c->val;
       ret.tainted = c->tainted;
