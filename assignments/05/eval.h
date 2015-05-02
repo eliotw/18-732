@@ -10,5 +10,6 @@ typedef struct state_t {
 
 void debug_eval(int);
 state_t * eval_stmts(ast_t *program, state_t *state);
+void taint_analysis(taint_list_t *list);
 
 #endif

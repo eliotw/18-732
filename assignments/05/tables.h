@@ -15,12 +15,8 @@ typedef int bool;
 typedef struct mod_val {
    value_t val;
    bool tainted;
+   struct taint_list_t *list;
 } mod_val;
-
-typedef struct taint_list {
-   char *varname;
-   struct tainted_list *next; 
-}
 
 typedef struct varctx_t {
   char *name;
@@ -36,6 +32,10 @@ typedef struct memctx_t {
   struct memctx_t *next;
 } memctx_t; 
 
+typedef struct taint_list_t {
+      char *name;
+        struct taint_list_t *next;
+} taint_list_t;
 
 /* Extends the context o to include a new variable. The initial value
    is DEFAULT_VAL */
@@ -44,6 +44,8 @@ varctx_t *newvar(char *name, varctx_t *o);
 /* returns the value corresponding to a variable in a context. Returns
    DEFAULT_VAL if no such name exists */
 mod_val lookup_var(char *name, varctx_t *c);
+
+taint_list_t *taint_var(char *name, varctx_t *c);
 
 /* update a variable. returns a new context, which may be different
    than c */

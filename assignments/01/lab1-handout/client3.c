@@ -22,8 +22,12 @@
 
 int main(int argc, char** argv)
 {
-	char reqstring[1000] =
-		"IMG:abcd.jpg;LAT:57.64911;LON:10.40744;CAP:Good morning!";
+	char reqstring[1000]; // =
+//		"IMG:abcd.jpg;LAT:57.64911;LON:10.40744;CAP:Good morning!";
+    
+    if(argc != 2) exit(-1);
+
+    memcpy(reqstring, argv[1], 1000);
 
 	int PORTNUM;
 	char SERVER_IP[16];
@@ -41,7 +45,7 @@ int main(int argc, char** argv)
         
 	/* Process command line switches */
 	/* Usage: client [-port <port_number>] [-server <server_IP>] */
-	for(i = 1; i < argc; i++){
+	/*for(i = 1; i < argc; i++){
 		if(argv[i][0] == '-'){
 			if(strcmp(argv[i], "-port") == 0){
 				PORTNUM = atoi(argv[++i]);
@@ -56,7 +60,7 @@ int main(int argc, char** argv)
 			printf("Unknown switch \"%s\"\n", argv[i]);
 			exit(1);
 		}
-	}
+	}*/
 
 	/* Fill in the server data structure */
 	memset(&srv, 0, sizeof(srv));

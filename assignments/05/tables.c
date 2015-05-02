@@ -36,6 +36,26 @@ mod_val lookup_var(char *name, varctx_t *c)
   return ret;
 }
 
+taint_list_t *taint_var(char *name, varctx_t *c)
+{
+  taint_list_t *ret = (taint_list_t *)malloc(sizeof(taint_list_t));
+  ret->name = "None";
+  ret->next = NULL;
+  while(c != NULL){
+    if(strcmp(c->name, name) == 0){
+      if(eval_debug)
+        printf("[Debug] taint_var: %s value: %d\n", name, c->tainted);
+      if (c->tainted)
+        ret->name = name;
+      return ret;
+    }
+    c=c->next;
+  }
+  if(eval_debug)
+    printf("[Debug] taint_var: %s <uninitialized. returning empty taint list>", name);
+  return ret;
+}
+
 varctx_t * update_var(char *name, mod_val val, varctx_t *o)
 {
   varctx_t *c = o;

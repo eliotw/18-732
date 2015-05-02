@@ -106,6 +106,7 @@ value_t eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 {
   taint_list_t *ret1, *ret2, *i;
+  value_t v;
   switch(e->tag){
     case int_ast:
       ret1 = (taint_list_t *)malloc(sizeof(taint_list_t));
@@ -123,10 +124,11 @@ taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
     case node_ast: {
       switch(e->info.node.tag){
         case MEM:
+          ret1 = taint_addr(eval_exp(e->info.node.arguments->elem, tbl,mem), mem);
           if (eval_debug) {
-            printf("[Debug] taint_exp: addr %d\n", eval_exp(e->info.node.arguments->elem, tbl, mem));
+            printf("[Debug] taint_exp: addr %d, taint: %s\n", eval_exp(e->info.node.arguments->elem, tbl, mem), ret1->name);
           }
-          return taint_addr(eval_exp(e->info.node.arguments->elem, tbl,mem), mem);
+          return ret1;
           break;
         case PLUS:
           ret1 = taint_exp(e->info.node.arguments->elem,tbl,mem);
@@ -166,7 +168,7 @@ taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
           } else if (!is_tainted(ret2)) {
             return ret1;
           } else {
-            i = ret1;
+            i = ret2;
             while (i->next != NULL)
               i = i->next;
             i->next = ret2;
@@ -288,7 +290,9 @@ taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
           }
           break;
         case AND:
+          v = eval_exp(e->info.node.arguments->elem,tbl,mem);
           ret1 = taint_exp(e->info.node.arguments->elem,tbl,mem);
+          if(v == 0) return ret1;
           ret2 = taint_exp(e->info.node.arguments->next->elem,tbl,mem);
           if (!is_tainted(ret1)) {
             return ret2;
@@ -303,7 +307,9 @@ taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
           }
           break;
         case OR:
+          v = eval_exp(e->info.node.arguments->elem,tbl,mem);
           ret1 = taint_exp(e->info.node.arguments->elem,tbl,mem);
+          if(v) return ret1;
           ret2 = taint_exp(e->info.node.arguments->next->elem,tbl,mem);
           if (!is_tainted(ret1)) {
             return ret2;
@@ -322,7 +328,22 @@ taint_list_t *taint_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
         case NOT:
           return taint_exp(e->info.node.arguments->elem,tbl,mem);
         case IFE:
-          return eval_exp(e->info.node.arguments->elem,tbl,mem) ? taint_exp(e->info.node.arguments->next->elem,tbl,mem): taint_exp(e->info.node.arguments->next->next->elem,tbl,mem);
+          if(eval_debug) printf("[Debug] IFE: ");
+          ret1 = taint_exp(e->info.node.arguments->elem,tbl,mem);
+          ret2 = eval_exp(e->info.node.arguments->elem,tbl,mem) ? taint_exp(e->info.node.arguments->next->elem,tbl,mem): taint_exp(e->info.node.arguments->next->next->elem,tbl,mem);
+
+          if (!is_tainted(ret1)) {
+            return ret2;
+          } else if (!is_tainted(ret2)) {
+            return ret1;
+          } else {
+            i = ret1;
+            while (i->next != NULL)
+              i = i->next;
+            i->next = ret2;
+            return ret1;
+          }
+          //return eval_exp(e->info.node.arguments->elem,tbl,mem) ? taint_exp(e->info.node.arguments->next->elem,tbl,mem): taint_exp(e->info.node.arguments->next->next->elem,tbl,mem);
           break;
         case READINT:
           if (eval_debug)
@@ -373,8 +394,8 @@ state_t* eval_stmts(ast_t *p, state_t *state)
         t1 = s->info.node.arguments->elem;
         /* the rhs */
         t2 = s->info.node.arguments->next->elem;
-        v = eval_exp(t2, state->tbl, state->mem);
         list = taint_exp(t2, state->tbl, state->mem);
+        v = eval_exp(t2, state->tbl, state->mem);
         taint = is_tainted(list);
         switch(t1->tag){
           /* update with taint information */

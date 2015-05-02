@@ -1,0 +1,6 @@
+a = get_secret_int();
+b = get_int();
+c = a > b ? 75 : 25;
+print(a);
+print(b);
+print(c);

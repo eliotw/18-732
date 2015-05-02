@@ -2,6 +2,7 @@
 #include "tables.h"
 #include "eval.h"
 #include <assert.h>
+#include <stdlib.h>
 
 int eval_debug = 0;
 
@@ -15,13 +16,47 @@ bool combine_taint(bool t1, bool t2) {
     return false;    
 }
 
-mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
+taint_list_t *combine_taint_list(taint_list_t *t1, taint_list_t *t2) {
+    taint_list_t *n = t1;
+    if(n == NULL) return t2;
+    else if(t2 == NULL) return t1;
+    else {
+        while(n->next != NULL) {
+            n = n->next;
+        }
+        n->next = t2;
+    }
+
+    return t1;
+}
+
+void add_taint_to_list(char *name, taint_list_t *print) {
+    if(eval_debug) printf("[Debug] adding %s to taint list\n", name);
+    taint_list_t *n = print;
+    if(print->name == NULL) {
+        if(eval_debug) printf("[Debug] list is empty, creating new list"); 
+        print->name = name;
+    } else {
+        while(n->next != NULL) {
+            printf("Found %u", n->name);
+            if(n->name == name) return;
+            n = n->next;
+        }
+        taint_list_t *new = (taint_list_t *)malloc(sizeof(taint_list_t));    
+        new->name = name;
+        new->next = NULL;
+        n->next = new;
+    }
+}
+
+mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem, taint_list_t *print)
 {
   value_t ret;
   mod_val mod_ret;
   mod_val mod_ret1;
   mod_val mod_ret2;
   mod_val mod_temp;
+  char *memret = malloc(12);
     switch(e->tag){
     case int_ast: 
         mod_ret.val = e->info.integer;
@@ -29,43 +64,50 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
         return mod_ret;
         break;
     case var_ast: 
+        if(eval_debug) printf("[Debug] var_ast");
         mod_ret = lookup_var(e->info.varname, tbl);
-        
-        // Check if variable is tainted
+
         if(mod_ret.tainted == true) {
-            fprintf(stderr, "%s", e->info.varname);
+            add_taint_to_list(e->info.varname, print);
         }
+
         return mod_ret;
         break;
     case node_ast: {
 	switch(e->info.node.tag){
 	case MEM:
-	  return load(eval_exp(e->info.node.arguments->elem, tbl,mem).val, mem);
+        mod_ret = load(eval_exp(e->info.node.arguments->elem, tbl,mem, print).val, mem);
+        
+        if(mod_ret.tainted == true) {
+            sprintf(memret, "mem[%u]", mem->addr);
+            add_taint_to_list(memret, print);
+        }
+        return mod_ret;
 	  break;
 	case PLUS:
-      mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+      mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
       mod_ret.val = mod_ret1.val + mod_ret2.val;
       mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
       return mod_ret;
 	  break;
 	case MINUS:
-	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-        mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+        mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
         mod_ret.val = mod_ret1.val - mod_ret2.val;
         mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
         return mod_ret;
 	  break;
 	case DIVIDE:
-	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	    mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	    mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
         mod_ret.val = mod_ret1.val / mod_ret2.val;
         mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
         return mod_ret;
 	  break;
 	case TIMES:
-	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	    mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+	    mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	    mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
         mod_ret.val = mod_ret1.val * mod_ret2.val;
         mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
         if(eval_debug)
@@ -74,8 +116,8 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 	  break;
 
 	case EQ:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val == mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           if(eval_debug) {
@@ -84,66 +126,66 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
           return mod_ret;
 	  break;
 	case NEQ:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val != mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	  break;
 	case GT:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val > mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	    break;
 	case LT:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val < mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	    break;
 	case LEQ:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val <= mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	    break;
 	case GEQ:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val >= mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	    break;
 	case AND:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val && mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	    break;
 	case OR:
-          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
-	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
+          mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+	      mod_ret2 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
           mod_ret.val = (mod_ret1.val || mod_ret2.val);
           mod_ret.tainted = combine_taint(mod_ret1.tainted, mod_ret2.tainted);
           return mod_ret;
 	  break;
 	case NEGATIVE:
-            mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
+            mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
             mod_ret1.val = -(mod_ret1.val);
             return mod_ret1;
 	case NOT:
-            mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem);
+            mod_ret1 = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
             mod_ret1.val = !(mod_ret1.val);
             return mod_ret1;
     case IFE:
-            mod_temp = eval_exp(e->info.node.arguments->elem,tbl,mem);
-            mod_ret1 = eval_exp(e->info.node.arguments->next->elem,tbl,mem);
-            mod_ret2 = eval_exp(e->info.node.arguments->next->next->elem,tbl,mem); 
+            mod_temp = eval_exp(e->info.node.arguments->elem,tbl,mem, print);
+            mod_ret1 = eval_exp(e->info.node.arguments->next->elem,tbl,mem, print);
+            mod_ret2 = eval_exp(e->info.node.arguments->next->next->elem,tbl,mem, print); 
             mod_ret.val = mod_temp.val ? mod_ret1.val : mod_ret2.val;
             mod_ret.tainted = mod_temp.val ? mod_ret1.tainted : mod_ret2.tainted;
             return mod_ret;
@@ -159,6 +201,7 @@ mod_val eval_exp(ast_t *e, varctx_t *tbl, memctx_t *mem)
 	  scanf("%d", &ret);
       mod_ret.val = ret;
       mod_ret.tainted = true;
+      add_taint_to_list("Direct", print);
 	  return mod_ret;
 	  break;
 	default:
@@ -176,6 +219,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
     ast_t *s;
     value_t v;
     mod_val mod_v;
+    struct taint_list_t print = {NULL, NULL};
 
     assert(p != NULL);
     assert(p->info.node.tag == SEQ);
@@ -190,7 +234,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 	    t1 = s->info.node.arguments->elem;
 	    /* the rhs */
 	    t2 = s->info.node.arguments->next->elem;
-        mod_v = eval_exp(t2, state->tbl, state->mem);
+        mod_v = eval_exp(t2, state->tbl, state->mem, &print);
 	    switch(t1->tag){
 	    case var_ast:
 		state->tbl = update_var(t1->info.string, mod_v, state->tbl);
@@ -199,7 +243,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 		assert(t1->info.node.tag == MEM);
 		state->mem = store(eval_exp(t1->info.node.arguments->elem,
 					  state->tbl, 
-					  state->mem).val, mod_v, state->mem);
+					  state->mem, &print).val, mod_v, state->mem);
 		break;
 	    default:
 		assert(0);
@@ -211,12 +255,12 @@ state_t* eval_stmts(ast_t *p, state_t *state)
             printf("%s\n", s->info.node.arguments->elem->info.string);
             break;
 	    default:
-            mod_v = eval_exp(s->info.node.arguments->elem, state->tbl, state->mem);
+            mod_v = eval_exp(s->info.node.arguments->elem, state->tbl, state->mem, &print);
 
             // Check if value is tainted
             if(mod_v.tainted == true) {
-                fprintf(stderr, "Tainted variable: ");
                 printf("<secret>\n");
+                taint_analysis(&print);
             } else {
                 fprintf(stderr, "Tainted variable: None\n");
                 printf("%u\n", mod_v.val);
@@ -227,7 +271,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 	  break;
 	case IF:
 
-	    if(eval_exp(s->info.node.arguments->elem, state->tbl, state->mem).val){
+	    if(eval_exp(s->info.node.arguments->elem, state->tbl, state->mem, &print).val){
 		state = eval_stmts(s->info.node.arguments->next->elem, state);
 	    } else {
 		state = eval_stmts(s->info.node.arguments->next->next->elem, state);
@@ -237,7 +281,7 @@ state_t* eval_stmts(ast_t *p, state_t *state)
 	    state = eval_stmts(s->info.node.arguments->next->elem, state);
 	  break;
 	case ASSERT:
-	    if(eval_exp(s->info.node.arguments->elem, state->tbl,state->mem).val ==0){
+	    if(eval_exp(s->info.node.arguments->elem, state->tbl,state->mem, &print).val ==0){
 		printf("Assert failed!\n");
 	    }
 	  break;
@@ -250,3 +294,20 @@ state_t* eval_stmts(ast_t *p, state_t *state)
     }
     return state;
 }
+
+void taint_analysis(taint_list_t *list)
+{
+  fprintf(stderr, "Tainted variable: ");
+  if(list == NULL) fprintf(stderr, "List is null\n");
+  while (list) {
+    if (eval_debug)
+      printf("[Debug] taint_analysis: %s\n", list->name);
+    fprintf(stderr, "%s", list->name);
+    if (list->next) {
+      fprintf(stderr, ", ");
+    }
+    list = list->next;
+  }
+  fprintf(stderr, "\n");
+}
+
