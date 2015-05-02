@@ -1,0 +1,6 @@
+x = get_secret_int();
+y = get_int();
+mem[y] = x;
+print(x ? 123 : 321);
+print(mem[y]);
+print(y == 42);

@@ -1,0 +1,6 @@
+a = get_secret_int();
+assert(a == a);
+a = 1;
+print(a + 120);
+print("a");
+print(a > a);

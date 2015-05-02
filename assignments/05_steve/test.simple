@@ -1,0 +1,4 @@
+w = get_int();
+mem[3] = get_secret_int();
+print(mem[w+1]);
+print(w);

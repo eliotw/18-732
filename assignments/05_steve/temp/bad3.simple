@@ -1,0 +1,6 @@
+mem[1] = get_secret_int();
+x = mem[1] + 2;
+mem[2] = 3*x;
+y = get_int();
+z = mem[2] - y;
+print(x + y + z);

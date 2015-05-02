@@ -1,0 +1,9 @@
+x = get_secret_int();
+mem[2] = get_int();
+if (mem[2]) {
+  x = mem[2] + 3;
+}
+else {
+  x = mem[2] + 1;
+}
+print(x);

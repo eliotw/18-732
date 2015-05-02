@@ -1,0 +1,6 @@
+mem[1] = get_secret_int();
+mem[1] = 42;
+mem[2] = get_int();
+mem[3] = mem[1] + mem[2];
+mem[4] = 2;
+print(mem[3] + mem[4]);

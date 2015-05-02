@@ -1,0 +1,8 @@
+mem[2] = get_secret_int();
+x = 2;
+if(mem[x]) {
+  print(100);
+}
+else {
+  print(0);
+}

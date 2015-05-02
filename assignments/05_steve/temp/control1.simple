@@ -1,0 +1,8 @@
+a = get_secret_int();
+b = get_secret_int();
+if (a && !b) {
+  print("a is not zero but b is");
+}
+else {
+  print("a is zero or b is nonzero");
+}
